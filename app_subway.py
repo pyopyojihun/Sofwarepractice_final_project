@@ -4,6 +4,8 @@ import folium
 import math
 import requests
 from pathlib import Path
+import os
+from dotenv import load_dotenv
 
 st.set_page_config(page_title="지하철 만남 지점 추천 서비스", layout="wide")
 # =========================
@@ -212,7 +214,8 @@ edge_time = {}      # (n1, n2) -> 시간(분)
 
 # 카카오 REST API 키 
 
-
+load_dotenv()
+KAKAO_REST_API_KEY = os.getenv("API_KEY")
 
 
 # =========================
