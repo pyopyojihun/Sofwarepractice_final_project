@@ -211,7 +211,7 @@ edge_distance = {}  # (n1, n2) -> 거리(km)
 edge_time = {}      # (n1, n2) -> 시간(분)
 
 # 카카오 REST API 키 
-KAKAO_REST_API_KEY = "2d03da2d8820fb8b46997aa45603523c"
+
 
 
 
