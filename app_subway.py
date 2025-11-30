@@ -213,9 +213,13 @@ edge_distance = {}  # (n1, n2) -> 거리(km)
 edge_time = {}      # (n1, n2) -> 시간(분)
 
 # 카카오 REST API 키 
-
 load_dotenv()
-KAKAO_REST_API_KEY = os.getenv("API_KEY")
+
+KAKAO_REST_API_KEY = (
+    st.secrets.get("KAKAO_REST_API_KEY")  # Streamlit Cloud / secrets.toml
+    if "KAKAO_REST_API_KEY" in st.secrets
+    else os.getenv("KAKAO_REST_API_KEY")  # .env 에서 사용
+)
 
 
 # =========================
