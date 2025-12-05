@@ -1,11 +1,10 @@
+import os
 import streamlit as st
 import csv
 import folium
 import math
 import requests
 from pathlib import Path
-import os
-from dotenv import load_dotenv
 
 st.set_page_config(page_title="지하철 만남 지점 추천 서비스", layout="wide")
 # =========================
@@ -213,14 +212,10 @@ edge_distance = {}  # (n1, n2) -> 거리(km)
 edge_time = {}      # (n1, n2) -> 시간(분)
 
 # 카카오 REST API 키 
-load_dotenv()
-
-KAKAO_REST_API_KEY = (
-    st.secrets.get("KAKAO_REST_API_KEY")  # Streamlit Cloud / secrets.toml
-    if "KAKAO_REST_API_KEY" in st.secrets
-    else os.getenv("KAKAO_REST_API_KEY")  # .env 에서 사용
-)
-
+if "KAKAO_REST_API_KEY" in st.secrets:
+    KAKAO_REST_API_KEY = st.secrets.get("KAKAO_REST_API_KEY")  # Streamlit Cloud / secrets.toml
+else:
+    KAKAO_REST_API_KEY = os.getenv("KAKAO_REST_API_KEY")  # .env 에서 사용
 
 # =========================
 # 데이터 로딩
@@ -713,20 +708,7 @@ with col1:
                             "total_time": t
                         })
 
-                    st.markdown("### 📊 인원별 이동 요약")
-                    for mp in meeting_paths:
-                        col_p1, col_p2, col_p3 = st.columns([1, 1, 2])
-                        with col_p1:
-                            st.metric(f"👤 {mp['person_idx']}번 사람", f"{mp['total_time']:.1f}분")
-                        with col_p2:
-                            dist_value = mp['total_dist'] if mp['total_dist'] > 0 else 0.0
-                            st.metric("📏 거리", f"{dist_value:.2f} km")
-                        with col_p3:
-                            path_display = " → ".join([f"{name}({line})" for name, line in zip(mp['pathNames'], mp['pathLine'])])
-                            st.caption(f"경로: {path_display}")
-                        st.markdown("<br>", unsafe_allow_html=True)
-
-                    # 만남역 주변 핫플 (맛집 기준)
+                    # 만남역 주변 핫플 검색 (지도 아래 표시용, 여기서는 표시하지 않음)
                     center_lat, center_lng = subwayLoc.get(best_station_name, (None, None))
                     hotplaces = []
                     if center_lat is not None:
@@ -734,21 +716,6 @@ with col1:
                             hotplaces = kakao_search_hotplaces(
                                 center_lat, center_lng, radius=1000, category_group_code="FD6"
                             )
-                        if hotplaces:
-                            st.markdown("### 🍽 만남역 주변 맛집/핫플")
-                            for idx, hp in enumerate(hotplaces[:5], 1):  # 상위 5개만 표시
-                                with st.container():
-                                    st.markdown(f"""
-                                    <div style="border-radius: 8px; margin: 1.0rem 0; background: #fff3cd; padding: 1rem; border-left: 4px solid #ffc107;">
-                                        <strong style="color:black;">🍴 {hp['name']}</strong><br>
-                                        <small style="color: black;">📍 {hp['address']}</small><br>
-                                        <small style="color: black;">📏 거리: {hp['distance']}m</small>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-                        else:
-                            st.info("ℹ️ 주변 맛집 정보를 찾지 못했습니다.")
-                    else:
-                        st.warning("⚠️ 만남역 좌표 정보를 찾지 못했습니다.")
 
                     # 세션 상태 저장 (지도 표시용)
                     st.session_state["mode"] = "meeting"
@@ -887,6 +854,59 @@ with col2:
         st.markdown('<div class="map-container">', unsafe_allow_html=True)
         st.components.v1.html(map_osm._repr_html_(), width=700, height=550)
         st.markdown('</div>', unsafe_allow_html=True)
+        
+        # 지도 아래에 각 사용자별 이동경로 및 장소추천 표시
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("---")
+        st.markdown("### 👥 각 사용자별 상세 이동경로")
+        
+        colors_display = ["🔴", "🔵", "🟢", "🟣", "🟠"]
+        for idx, mp in enumerate(meeting_paths):
+            color_emoji = colors_display[idx % len(colors_display)]
+            
+            with st.expander(f"{color_emoji} {mp['person_idx']}번 사람 이동경로", expanded=True):
+                # 출발역 정보
+                start_station_display = mp['pathNames'][0] if mp['pathNames'] else mp['start_station']
+                st.markdown(f"""
+                <div style="background: #e3f2fd; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; color: #000000;">
+                    <strong style="color: #000000;">📍 출발역:</strong> <span style="color: #000000;">{start_station_display}</span><br>
+                    <strong style="color: #000000;">⏱️ 소요시간:</strong> <span style="color: #000000;">{mp['total_time']:.1f}분</span><br>
+                    <strong style="color: #000000;">📏 이동거리:</strong> <span style="color: #000000;">{mp['total_dist']:.2f} km</span>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # 경로 상세
+                if mp['pathNames']:
+                    path_display = " → ".join([
+                        f"**{name}**" if i == 0 or i == len(mp['pathNames'])-1 
+                        else f"{name}({line})" 
+                        for i, (name, line) in enumerate(zip(mp['pathNames'], mp['pathLine']))
+                    ])
+                    st.markdown(f"**경로:** {path_display}")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+        
+        # 만남역 주변 장소 추천
+        if hotplaces:
+            st.markdown("---")
+            st.markdown("### 🍽 만남역 주변 추천 장소")
+            st.markdown(f"**📍 만남역: {meeting_station_name}** 주변의 맛집 및 핫플레이스를 추천합니다.")
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # 카드 형태로 장소 추천 표시
+            cols = st.columns(2)
+            for idx, hp in enumerate(hotplaces[:6]):  # 최대 6개 표시
+                with cols[idx % 2]:
+                    st.markdown(f"""
+                    <div style="border-radius: 8px; margin: 0.5rem 0; background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%); padding: 1rem; border-left: 4px solid #ffc107; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <strong style="color:black; font-size: 1.1rem;">🍴 {hp['name']}</strong><br>
+                        <small style="color: #555;">📍 {hp['address']}</small><br>
+                        <small style="color: #666;">📏 만남역으로부터 {hp['distance']}m</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.markdown("---")
+            st.info("ℹ️ 만남역 주변 장소 정보를 찾지 못했습니다.")
 
     else:
         default_map = folium.Map(location=[37.5665, 126.9780], zoom_start=11)
@@ -899,3 +919,5 @@ with col2:
             <p style="color: #666;">좌측에서 경로를 찾거나, 다중 인원 만남 지점을 계산해보세요.</p>
         </div>
         """, unsafe_allow_html=True)
+
+
